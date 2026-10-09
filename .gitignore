@@ -1,0 +1,41 @@
+Backend/.env
+Backend/venv/
+Backend/__pycache__/
+Backend/app/__pycache__/
+Backend/uploads/*
+Mobile/.dart_tool/
+Mobile/build/
+Mobile/.idea/
+
+# Terraform: estados, planes y variables locales
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+terraform.tfvars
+terraform.tfvars.json
+
+# Credenciales y secretos
+*.env
+*.env.*
+!*.env.example
+*service-account*.json
+*credentials*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+terraform/terraform.tfvars
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform/
+terraform/*.tfplan
