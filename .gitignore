@@ -39,3 +39,9 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/.terraform/
 terraform/*.tfplan
+
+# Planes y respaldos locales de Terraform
+terraform/tfplan
+terraform/tfplan-secrets
+terraform/*.bak
+terraform/*.backup

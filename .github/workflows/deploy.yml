@@ -1,4 +1,4 @@
-﻿name: TaskFlow - Validar backend
+﻿name: TaskFlow - Validar y desplegar
 
 on:
   push:
@@ -7,8 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate-backend:
+    name: Validar backend
     runs-on: ubuntu-latest
 
     defaults:
@@ -31,3 +35,65 @@ jobs:
 
       - name: Verificar sintaxis Python
         run: python -m compileall -q app
+
+  deploy:
+    name: Publicar y desplegar en Google Cloud
+    needs: validate-backend
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      PROJECT_ID: project-8545473a-2e97-44ae-9bd
+      REGION: us-central1
+      REPOSITORY: taskflow-images
+      IMAGE_NAME: taskflow-api
+      SERVICE_NAME: taskflow-api
+      RUNTIME_SA: taskflow-run@project-8545473a-2e97-44ae-9bd.iam.gserviceaccount.com
+      CLOUDSQL_INSTANCE: project-8545473a-2e97-44ae-9bd:us-central1:taskflow-postgres
+      BUCKET_NAME: taskflow-uploads-project-8545473a-2e97-44ae-9bd
+
+    steps:
+      - name: Descargar codigo
+        uses: actions/checkout@v4
+
+      - name: Autenticar con Google Cloud mediante WIF
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/719339420669/locations/global/workloadIdentityPools/taskflow-github-pool/providers/github-provider
+          service_account: taskflow-github-deploy@project-8545473a-2e97-44ae-9bd.iam.gserviceaccount.com
+
+      - name: Configurar Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: project-8545473a-2e97-44ae-9bd
+
+      - name: Configurar Docker para Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Construir imagen
+        run: |
+          docker build \
+            -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA \
+            -f Backend/Dockerfile Backend
+
+      - name: Publicar imagen
+        run: |
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA
+
+      - name: Desplegar en Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE_NAME" \
+            --project="$PROJECT_ID" \
+            --image="us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA" \
+            --region="$REGION" \
+            --platform=managed \
+            --service-account="$RUNTIME_SA" \
+            --add-cloudsql-instances="$CLOUDSQL_INSTANCE" \
+            --set-secrets="DATABASE_URL=taskflow-database-url:latest,JWT_SECRET_KEY=taskflow-jwt-secret:latest" \
+            --set-env-vars="JWT_ALGORITHM=HS256,ACCESS_TOKEN_EXPIRE_MINUTES=60,GCS_BUCKET_NAME=$BUCKET_NAME" \
+            --allow-unauthenticated \
+            --port=8000

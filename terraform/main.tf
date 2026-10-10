@@ -35,6 +35,7 @@ resource "google_sql_database_instance" "taskflow" {
   deletion_protection = false
 
   settings {
+    edition           = "ENTERPRISE"
     tier              = "db-f1-micro"
     availability_type = "ZONAL"
     disk_type         = "PD_HDD"
@@ -106,3 +107,23 @@ resource "google_storage_bucket_iam_member" "taskflow_uploads" {
   member = "serviceAccount:${google_service_account.taskflow.email}"
 }
 
+
+resource "google_secret_manager_secret_version" "db_password" {
+  secret      = google_secret_manager_secret.db_password.id
+  secret_data = var.db_password
+}
+
+resource "google_secret_manager_secret_version" "jwt_secret" {
+  secret      = google_secret_manager_secret.jwt_secret.id
+  secret_data = var.jwt_secret
+}
+
+resource "google_secret_manager_secret_version" "database_url" {
+  secret      = google_secret_manager_secret.database_url.id
+  secret_data = "postgresql+psycopg://${var.db_user}:${urlencode(var.db_password)}@/${var.db_name}?host=/cloudsql/${google_sql_database_instance.taskflow.connection_name}"
+
+  depends_on = [
+    google_sql_database.taskflow,
+    google_sql_user.taskflow
+  ]
+}

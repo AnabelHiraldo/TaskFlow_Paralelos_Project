@@ -1,0 +1,158 @@
+﻿swagger: "2.0"
+info:
+  title: TaskFlow API
+  description: Gateway para la API de TaskFlow
+  version: "1.0.0"
+schemes:
+  - https
+produces:
+  - application/json
+x-google-backend:
+  address: https://taskflow-api-719339420669.us-central1.run.app
+  path_translation: APPEND_PATH_TO_ADDRESS
+  disable_auth: true
+paths:
+  /:
+    get:
+      operationId: getRoot
+      responses:
+        "200":
+          description: API disponible
+  /auth/register:
+    post:
+      operationId: register
+      responses:
+        "200":
+          description: Registro procesado
+        "201":
+          description: Usuario creado
+  /auth/login:
+    post:
+      operationId: login
+      responses:
+        "200":
+          description: Inicio de sesión procesado
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      responses:
+        "200":
+          description: Usuario actual
+  /users:
+    get:
+      operationId: listUsers
+      responses:
+        "200":
+          description: Lista de usuarios
+  /users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getUser
+      responses:
+        "200":
+          description: Usuario encontrado
+    put:
+      operationId: updateUser
+      responses:
+        "200":
+          description: Usuario actualizado
+    delete:
+      operationId: deleteUser
+      responses:
+        "200":
+          description: Usuario eliminado
+  /tasks:
+    get:
+      operationId: listTasks
+      responses:
+        "200":
+          description: Lista de tareas
+    post:
+      operationId: createTask
+      responses:
+        "201":
+          description: Tarea creada
+        "200":
+          description: Tarea procesada
+  /tasks/{task_id}:
+    parameters:
+      - name: task_id
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getTask
+      responses:
+        "200":
+          description: Tarea encontrada
+    put:
+      operationId: updateTask
+      responses:
+        "200":
+          description: Tarea actualizada
+    delete:
+      operationId: deleteTask
+      responses:
+        "200":
+          description: Tarea eliminada
+  /upload:
+    post:
+      operationId: uploadFile
+      consumes:
+        - multipart/form-data
+      responses:
+        "200":
+          description: Archivo procesado
+        "201":
+          description: Archivo cargado
+  /upload/{file_id}:
+    parameters:
+      - name: file_id
+        in: path
+        required: true
+        type: string
+    delete:
+      operationId: deleteFile
+      responses:
+        "200":
+          description: Archivo eliminado
+  /dashboard/profile:
+    get:
+      operationId: dashboardProfile
+      responses:
+        "200":
+          description: Perfil del dashboard
+  /dashboard/stats:
+    get:
+      operationId: dashboardStats
+      responses:
+        "200":
+          description: Estadísticas del dashboard
+  /dashboard/notifications:
+    get:
+      operationId: dashboardNotifications
+      responses:
+        "200":
+          description: Notificaciones
+  /dashboard/task-summary:
+    get:
+      operationId: dashboardTaskSummary
+      responses:
+        "200":
+          description: Resumen de tareas
+  /dashboard/sequential:
+    get:
+      operationId: dashboardSequential
+      responses:
+        "200":
+          description: Datos secuenciales
+  /dashboard/concurrent:
+    get:
+      operationId: dashboardConcurrent
+      responses:
+        "200":
+          description: Datos concurrentes
