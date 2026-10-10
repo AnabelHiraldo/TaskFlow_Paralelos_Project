@@ -17,7 +17,11 @@ class _FilesViewState extends State<FilesView> {
 
   Future<void> _pickAndUpload() async {
     try {
-      final result = await FilePicker.pickFiles();
+
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+    );
 
       if (result.isEmpty) return;
 
