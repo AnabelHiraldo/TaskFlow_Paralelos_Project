@@ -128,6 +128,20 @@ resource "google_secret_manager_secret_version" "database_url" {
   ]
 }
 
+# GitHub Actions obtains the already existing DB and JWT values from Secret Manager.
+# Grant access only to these two secrets; credentials never need to be GitHub secrets.
+resource "google_secret_manager_secret_iam_member" "deployer_db_password_accessor" {
+  secret_id = google_secret_manager_secret.db_password.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "deployer_jwt_secret_accessor" {
+  secret_id = google_secret_manager_secret.jwt_secret.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${var.deployment_service_account_email}"
+}
+
 # Pub/Sub, Cloud Run de notificaciones y permisos mínimos para el flujo de correo.
 resource "google_project_service" "notification_apis" {
   for_each = toset([

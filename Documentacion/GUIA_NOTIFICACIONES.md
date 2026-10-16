@@ -31,24 +31,21 @@ La respuesta `202` y el texto **Mensaje enviado correctamente.** significan que 
 
 La cuenta de despliegue de GitHub debe autenticarse mediante el Workload Identity Federation que ya usa el workflow. Necesita permisos para Artifact Registry, Cloud Run, Pub/Sub, Secret Manager, Logging, IAM y los recursos existentes de Cloud SQL y Storage que ya administra Terraform. También debe poder actuar como las cuentas runtime de Cloud Run.
 
-El backend remoto de Terraform necesita un bucket de Cloud Storage creado una sola vez antes de que corra GitHub Actions. Usa acceso uniforme, acceso público bloqueado y versionado de objetos. Guarda el nombre como secreto `TF_STATE_BUCKET` en GitHub Actions. El bucket del estado contiene datos sensibles de Terraform: limita quién puede leerlo y no lo compartas.
+El backend remoto de Terraform está configurado con el bucket `taskflow-tfstate-project-8545473a-2e97-44ae-9bd`, creado con acceso uniforme, acceso público bloqueado y versionado de objetos. El estado local existente se migró allí para conservar el inventario de Cloud SQL, Artifact Registry y los recursos actuales. El estado puede contener datos sensibles: limita quién puede leer el bucket.
 
-Si los recursos base de TaskFlow ya existen en el proyecto, importa esos recursos existentes al estado remoto antes del primer `apply`. Este repositorio desplegaba el backend con `gcloud`, y el workflow anterior no configuraba estado Terraform; por eso un estado vacío podría intentar recrear Artifact Registry, Cloud SQL, secretos o el bucket y terminar con conflictos. No borres esos recursos para resolverlos: primero asócialos al estado con `terraform import`.
+Los recursos base de TaskFlow ya están asociados al estado remoto migrado. El tópico `taskflow-notifications`, las APIs necesarias y los permisos de lectura específicos de secretos para GitHub Actions también están registrados en Terraform.
 
 ## Secretos para GitHub Actions
 
-Crea estos GitHub Actions secrets antes de ejecutar el workflow:
+Crea estos GitHub Actions secrets antes del despliegue. Los valores de base de datos y JWT se leen directamente desde Secret Manager con la identidad federada de GitHub; no hace falta copiarlos a GitHub.
 
 | Secreto | Valor |
 | --- | --- |
-| `TF_STATE_BUCKET` | Bucket ya creado para el estado remoto de Terraform. |
-| `TF_DB_PASSWORD` | Contraseña del usuario PostgreSQL. |
-| `TF_JWT_SECRET` | Clave privada con la que se firman los JWT. |
-| `SMTP_HOST` | Host SMTP permitido por el proveedor del correo. |
-| `SMTP_PORT` | `587` para STARTTLS o `465` para SSL. |
 | `SMTP_USERNAME` | Usuario de la cuenta SMTP. |
 | `SMTP_PASSWORD` | Contraseña SMTP o contraseña de aplicación. |
 | `SMTP_FROM` | Dirección remitente verificada en el proveedor. |
+
+El workflow lee `taskflow-db-password` (versión actual) y `taskflow-jwt-secret` (versión 1) desde Secret Manager. La cuenta de despliegue solo recibe acceso de lectura a esos dos secretos. La Cloud Run principal conserva `DATABASE_URL` desde `taskflow-database-url:1` y `JWT_SECRET_KEY` desde `taskflow-jwt-secret:1`. SMTP usa `smtp.gmail.com:587` como valor predeterminado.
 
 El estado Terraform almacena el valor de los secretos que Terraform administra, aunque la consola los marque como sensibles y no los imprima en el plan. Por eso el bucket y sus permisos son importantes. `terraform.tfvars` es local e ignorado por Git; parte de `terraform.tfvars.example` si haces un despliegue manual.
 

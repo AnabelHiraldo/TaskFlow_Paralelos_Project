@@ -63,20 +63,15 @@ jobs:
         with:
           project_id: project-8545473a-2e97-44ae-9bd
 
-      - name: Configurar Docker para Artifact Registry
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
-
       - name: Verificar secretos requeridos para Terraform y SMTP
         env:
-          TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
-          TF_JWT_SECRET: ${{ secrets.TF_JWT_SECRET }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
         shell: bash
         run: |
           missing=0
-          for name in TF_DB_PASSWORD TF_JWT_SECRET SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
+          for name in SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
             if [[ -z "${!name}" ]]; then
               echo "Falta configurar el secret de GitHub: $name"
               missing=1
@@ -86,6 +81,23 @@ jobs:
             echo "Configura los secrets indicados en Settings > Secrets and variables > Actions."
             exit 1
           fi
+
+      - name: Leer secretos existentes de Secret Manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          DB_PASSWORD="$(gcloud secrets versions access latest --secret=taskflow-db-password --project="$PROJECT_ID")"
+          JWT_SECRET="$(gcloud secrets versions access 1 --secret=taskflow-jwt-secret --project="$PROJECT_ID")"
+          printf '::add-mask::%s\n' "$DB_PASSWORD"
+          printf '::add-mask::%s\n' "$JWT_SECRET"
+          {
+            printf 'TF_VAR_db_password=%s\n' "$DB_PASSWORD"
+            printf 'TF_VAR_jwt_secret=%s\n' "$JWT_SECRET"
+          } >> "$GITHUB_ENV"
+          unset DB_PASSWORD JWT_SECRET
+
+      - name: Configurar Docker para Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
       - name: Construir imágenes
         run: |
@@ -115,8 +127,6 @@ jobs:
         env:
           TF_VAR_project_id: ${{ env.PROJECT_ID }}
           TF_VAR_region: ${{ env.REGION }}
-          TF_VAR_db_password: ${{ secrets.TF_DB_PASSWORD }}
-          TF_VAR_jwt_secret: ${{ secrets.TF_JWT_SECRET }}
           TF_VAR_notification_image: us-central1-docker.pkg.dev/project-8545473a-2e97-44ae-9bd/taskflow-images/notification-cloud-run:${{ github.sha }}
           TF_VAR_smtp_username: ${{ secrets.SMTP_USERNAME }}
           TF_VAR_smtp_password: ${{ secrets.SMTP_PASSWORD }}
@@ -134,7 +144,7 @@ jobs:
             --platform=managed \
             --service-account="$RUNTIME_SA" \
             --add-cloudsql-instances="$CLOUDSQL_INSTANCE" \
-            --set-secrets="DATABASE_URL=taskflow-database-url:latest,JWT_SECRET_KEY=taskflow-jwt-secret:latest" \
+            --set-secrets="DATABASE_URL=taskflow-database-url:1,JWT_SECRET_KEY=taskflow-jwt-secret:1" \
             --set-env-vars="JWT_ALGORITHM=HS256,ACCESS_TOKEN_EXPIRE_MINUTES=60,GCS_BUCKET_NAME=$BUCKET_NAME,GCP_PROJECT_ID=$PROJECT_ID,NOTIFICATION_TOPIC=taskflow-notifications" \
             --allow-unauthenticated \
             --port=8000
