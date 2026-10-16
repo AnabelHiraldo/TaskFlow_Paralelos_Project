@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from . import models
-from .routers import auth, users, tasks, files, dashboard
+from .routers import auth, users, tasks, files, dashboard, notifications
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +30,7 @@ app.include_router(users.router)
 app.include_router(tasks.router)
 app.include_router(files.router)
 app.include_router(dashboard.router)
+app.include_router(notifications.router)
 
 @app.get("/", tags=["Health"])
 def root():

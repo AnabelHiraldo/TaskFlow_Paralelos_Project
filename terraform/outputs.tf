@@ -29,3 +29,15 @@ output "jwt_secret_name" {
 output "uploads_bucket_name" {
   value = google_storage_bucket.taskflow_uploads.name
 }
+
+output "notification_topic" {
+  value = google_pubsub_topic.notifications.name
+}
+
+output "notification_cloud_run_url" {
+  value = google_cloud_run_v2_service.notifications.uri
+}
+
+output "notification_subscription" {
+  value = google_pubsub_subscription.notifications_to_cloud_run.name
+}

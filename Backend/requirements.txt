@@ -9,3 +9,4 @@ pydantic-settings
 email-validator
 
 google-cloud-storage
+google-cloud-pubsub

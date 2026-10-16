@@ -127,3 +127,204 @@ resource "google_secret_manager_secret_version" "database_url" {
     google_sql_user.taskflow
   ]
 }
+
+# Pub/Sub, Cloud Run de notificaciones y permisos mínimos para el flujo de correo.
+resource "google_project_service" "notification_apis" {
+  for_each = toset([
+    "pubsub.googleapis.com",
+    "run.googleapis.com",
+    "secretmanager.googleapis.com",
+    "logging.googleapis.com",
+    "iam.googleapis.com",
+  ])
+  project            = var.project_id
+  service            = each.value
+  disable_on_destroy = false
+}
+
+resource "google_pubsub_topic" "notifications" {
+  name       = "taskflow-notifications"
+  depends_on = [google_project_service.notification_apis]
+}
+
+resource "google_service_account" "notification_runtime" {
+  account_id   = "taskflow-notifications"
+  display_name = "TaskFlow notification Cloud Run runtime"
+  depends_on   = [google_project_service.notification_apis]
+}
+
+resource "google_service_account" "pubsub_invoker" {
+  account_id   = "taskflow-pubsub-invoker"
+  display_name = "Pub/Sub identity for invoking notification Cloud Run"
+  depends_on   = [google_project_service.notification_apis]
+}
+
+resource "google_service_account_iam_member" "deployer_uses_notification_runtime" {
+  service_account_id = google_service_account.notification_runtime.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_service_account_iam_member" "deployer_uses_pubsub_invoker" {
+  service_account_id = google_service_account.pubsub_invoker.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_pubsub_topic_iam_member" "backend_publish_notifications" {
+  topic  = google_pubsub_topic.notifications.id
+  role   = "roles/pubsub.publisher"
+  member = "serviceAccount:${google_service_account.taskflow.email}"
+}
+
+resource "google_project_iam_member" "notification_logs" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${google_service_account.notification_runtime.email}"
+}
+
+resource "google_secret_manager_secret" "smtp_username" {
+  secret_id = "taskflow-smtp-username"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "smtp_password" {
+  secret_id = "taskflow-smtp-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "smtp_username" {
+  secret      = google_secret_manager_secret.smtp_username.id
+  secret_data = var.smtp_username
+}
+
+resource "google_secret_manager_secret_version" "smtp_password" {
+  secret      = google_secret_manager_secret.smtp_password.id
+  secret_data = var.smtp_password
+}
+
+resource "google_secret_manager_secret_iam_member" "smtp_username_accessor" {
+  secret_id = google_secret_manager_secret.smtp_username.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.notification_runtime.email}"
+}
+
+resource "google_secret_manager_secret_iam_member" "smtp_password_accessor" {
+  secret_id = google_secret_manager_secret.smtp_password.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.notification_runtime.email}"
+}
+
+resource "google_cloud_run_v2_service" "notifications" {
+  name                = "notification-cloud-run"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    service_account = google_service_account.notification_runtime.email
+    timeout         = "60s"
+    scaling {
+      max_instance_count = 5
+    }
+    containers {
+      image = var.notification_image
+      ports {
+        container_port = 8080
+      }
+      env {
+        name  = "SMTP_HOST"
+        value = var.smtp_host
+      }
+      env {
+        name  = "SMTP_PORT"
+        value = tostring(var.smtp_port)
+      }
+      env {
+        name  = "SMTP_FROM"
+        value = var.smtp_from
+      }
+      env {
+        name = "SMTP_USERNAME"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.smtp_username.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "SMTP_PASSWORD"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.smtp_password.secret_id
+            version = "latest"
+          }
+        }
+      }
+      startup_probe {
+        http_get {
+          path = "/health"
+        }
+        initial_delay_seconds = 0
+        period_seconds        = 10
+        timeout_seconds       = 3
+        failure_threshold     = 6
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_service.notification_apis,
+    google_secret_manager_secret_iam_member.smtp_username_accessor,
+    google_secret_manager_secret_iam_member.smtp_password_accessor,
+    google_secret_manager_secret_version.smtp_username,
+    google_secret_manager_secret_version.smtp_password,
+    google_service_account_iam_member.deployer_uses_notification_runtime,
+  ]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "pubsub_invokes_notifications" {
+  project  = var.project_id
+  location = google_cloud_run_v2_service.notifications.location
+  name     = google_cloud_run_v2_service.notifications.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.pubsub_invoker.email}"
+}
+
+resource "google_project_service_identity" "pubsub" {
+  provider   = google-beta
+  project    = var.project_id
+  service    = "pubsub.googleapis.com"
+  depends_on = [google_project_service.notification_apis]
+}
+
+resource "google_service_account_iam_member" "pubsub_token_creator" {
+  service_account_id = google_service_account.pubsub_invoker.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_project_service_identity.pubsub.email}"
+}
+
+resource "google_pubsub_subscription" "notifications_to_cloud_run" {
+  name  = "taskflow-notifications-to-cloud-run"
+  topic = google_pubsub_topic.notifications.id
+  push_config {
+    push_endpoint = "${google_cloud_run_v2_service.notifications.uri}/pubsub"
+    oidc_token {
+      service_account_email = google_service_account.pubsub_invoker.email
+      audience              = google_cloud_run_v2_service.notifications.uri
+    }
+  }
+  retry_policy {
+    minimum_backoff = "10s"
+    maximum_backoff = "600s"
+  }
+  depends_on = [
+    google_cloud_run_v2_service_iam_member.pubsub_invokes_notifications,
+    google_service_account_iam_member.pubsub_token_creator,
+    google_service_account_iam_member.deployer_uses_pubsub_invoker,
+  ]
+}

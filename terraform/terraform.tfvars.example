@@ -1,0 +1,16 @@
+# Copia estos campos a terraform.tfvars (nunca subas el archivo real a Git).
+project_id       = "tu-project-id"
+region           = "us-central1"
+db_name          = "taskflow"
+db_user          = "taskflow_user"
+db_password      = "tu-password-segura"
+jwt_secret       = "tu-secreto-jwt"
+
+# Imagen que publica GitHub Actions. En despliegues manuales debe existir antes del apply.
+notification_image = "us-central1-docker.pkg.dev/tu-project-id/taskflow-images/notification-cloud-run:tag"
+
+smtp_host     = "smtp.gmail.com"
+smtp_port     = 587
+smtp_username = "tu-cuenta-smtp"
+smtp_password = "tu-contrasena-de-aplicacion"
+smtp_from     = "tu-cuenta-smtp"

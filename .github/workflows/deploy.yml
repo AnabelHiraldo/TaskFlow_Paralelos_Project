@@ -1,4 +1,4 @@
-﻿name: TaskFlow - Validar y desplegar
+name: TaskFlow - Validar y desplegar
 
 on:
   push:
@@ -14,25 +14,20 @@ jobs:
   validate-backend:
     name: Validar backend
     runs-on: ubuntu-latest
-
     defaults:
       run:
         working-directory: Backend
-
     steps:
       - name: Descargar codigo
         uses: actions/checkout@v4
-
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
       - name: Verificar sintaxis Python
         run: python -m compileall -q app
 
@@ -41,20 +36,17 @@ jobs:
     needs: validate-backend
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       id-token: write
-
     env:
       PROJECT_ID: project-8545473a-2e97-44ae-9bd
       REGION: us-central1
       REPOSITORY: taskflow-images
-      IMAGE_NAME: taskflow-api
-      SERVICE_NAME: taskflow-api
       RUNTIME_SA: taskflow-run@project-8545473a-2e97-44ae-9bd.iam.gserviceaccount.com
       CLOUDSQL_INSTANCE: project-8545473a-2e97-44ae-9bd:us-central1:taskflow-postgres
       BUCKET_NAME: taskflow-uploads-project-8545473a-2e97-44ae-9bd
+      TF_STATE_BUCKET: taskflow-tfstate-project-8545473a-2e97-44ae-9bd
 
     steps:
       - name: Descargar codigo
@@ -74,26 +66,88 @@ jobs:
       - name: Configurar Docker para Artifact Registry
         run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
-      - name: Construir imagen
+      - name: Verificar secretos requeridos para Terraform y SMTP
+        env:
+          TF_DB_PASSWORD: ${{ secrets.TF_DB_PASSWORD }}
+          TF_JWT_SECRET: ${{ secrets.TF_JWT_SECRET }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+        shell: bash
         run: |
-          docker build \
-            -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA \
-            -f Backend/Dockerfile Backend
+          missing=0
+          for name in TF_DB_PASSWORD TF_JWT_SECRET SMTP_USERNAME SMTP_PASSWORD SMTP_FROM; do
+            if [[ -z "${!name}" ]]; then
+              echo "Falta configurar el secret de GitHub: $name"
+              missing=1
+            fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            echo "Configura los secrets indicados en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
 
-      - name: Publicar imagen
+      - name: Construir imágenes
         run: |
-          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA
+          docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/taskflow-api:$GITHUB_SHA -f Backend/Dockerfile Backend
+          docker build -t us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/notification-cloud-run:$GITHUB_SHA -f Notification/Dockerfile Notification
 
-      - name: Desplegar en Cloud Run
+      - name: Publicar imágenes
         run: |
-          gcloud run deploy "$SERVICE_NAME" \
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/taskflow-api:$GITHUB_SHA
+          docker push us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/notification-cloud-run:$GITHUB_SHA
+
+      - name: Preparar Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
+      - name: Inicializar Terraform
+        working-directory: terraform
+        run: terraform init -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="prefix=taskflow/terraform"
+
+      - name: Validar Terraform
+        working-directory: terraform
+        run: terraform validate
+
+      - name: Planificar y aplicar infraestructura
+        working-directory: terraform
+        env:
+          TF_VAR_project_id: ${{ env.PROJECT_ID }}
+          TF_VAR_region: ${{ env.REGION }}
+          TF_VAR_db_password: ${{ secrets.TF_DB_PASSWORD }}
+          TF_VAR_jwt_secret: ${{ secrets.TF_JWT_SECRET }}
+          TF_VAR_notification_image: us-central1-docker.pkg.dev/project-8545473a-2e97-44ae-9bd/taskflow-images/notification-cloud-run:${{ github.sha }}
+          TF_VAR_smtp_username: ${{ secrets.SMTP_USERNAME }}
+          TF_VAR_smtp_password: ${{ secrets.SMTP_PASSWORD }}
+          TF_VAR_smtp_from: ${{ secrets.SMTP_FROM }}
+        run: |
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
+
+      - name: Desplegar backend principal en Cloud Run
+        run: |
+          gcloud run deploy taskflow-api \
             --project="$PROJECT_ID" \
-            --image="us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$IMAGE_NAME:$GITHUB_SHA" \
+            --image="us-central1-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/taskflow-api:$GITHUB_SHA" \
             --region="$REGION" \
             --platform=managed \
             --service-account="$RUNTIME_SA" \
             --add-cloudsql-instances="$CLOUDSQL_INSTANCE" \
             --set-secrets="DATABASE_URL=taskflow-database-url:latest,JWT_SECRET_KEY=taskflow-jwt-secret:latest" \
-            --set-env-vars="JWT_ALGORITHM=HS256,ACCESS_TOKEN_EXPIRE_MINUTES=60,GCS_BUCKET_NAME=$BUCKET_NAME" \
+            --set-env-vars="JWT_ALGORITHM=HS256,ACCESS_TOKEN_EXPIRE_MINUTES=60,GCS_BUCKET_NAME=$BUCKET_NAME,GCP_PROJECT_ID=$PROJECT_ID,NOTIFICATION_TOPIC=taskflow-notifications" \
             --allow-unauthenticated \
             --port=8000
+
+      - name: Publicar la nueva ruta de API Gateway
+        run: |
+          API_CONFIG_NAME="taskflow-config-$GITHUB_SHA"
+          gcloud api-gateway api-configs create "$API_CONFIG_NAME" \
+            --api=taskflow-api \
+            --project="$PROJECT_ID" \
+            --openapi-spec=terraform/api-gateway.yaml
+          gcloud api-gateway gateways update taskflow-gateway \
+            --api=taskflow-api \
+            --api-config="$API_CONFIG_NAME" \
+            --location="$REGION" \
+            --project="$PROJECT_ID"

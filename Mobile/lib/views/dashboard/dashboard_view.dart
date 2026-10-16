@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../users/users_view.dart';
 import '../tasks/tasks_view.dart';
 import '../files/files_view.dart';
+import '../notifications/notifications_view.dart';
 
 class DashboardView extends StatelessWidget {
   final VoidCallback onLogout;
@@ -26,7 +27,7 @@ class DashboardView extends StatelessWidget {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -54,6 +55,22 @@ class DashboardView extends StatelessWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => const UsersView(),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.email_outlined),
+                title: const Text('Enviar correo'),
+                subtitle: const Text('Enviar un correo mediante Pub/Sub'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const NotificationsView(),
                     ),
                   );
                 },

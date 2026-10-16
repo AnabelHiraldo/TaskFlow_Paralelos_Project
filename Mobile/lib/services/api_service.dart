@@ -116,6 +116,20 @@ class ApiService {
     await request('DELETE', '/upload/$fileId');
   }
 
+  Future<Map<String, dynamic>> sendNotification({
+    required String email,
+    required String subject,
+    required String message,
+  }) async {
+    final response = await request('POST', '/notifications/send', body: {
+      'email': email.trim(),
+      'subject': subject.trim(),
+      'message': message.trim(),
+    });
+    if (response is Map<String, dynamic>) return response;
+    throw Exception('La respuesta del servidor no tiene el formato esperado.');
+  }
+
   Future<Map<String, dynamic>> login(
     String email,
     String password,

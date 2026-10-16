@@ -5,6 +5,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "change-this-secret"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
+    gcp_project_id: str | None = None
+    notification_topic: str = "taskflow-notifications"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

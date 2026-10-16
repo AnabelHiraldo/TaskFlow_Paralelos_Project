@@ -32,6 +32,31 @@ paths:
       responses:
         "200":
           description: Inicio de sesión procesado
+  /notifications/send:
+    post:
+      operationId: sendNotification
+      parameters:
+        - name: body
+          in: body
+          required: true
+          schema:
+            type: object
+            required: [email, subject, message]
+            properties:
+              email:
+                type: string
+                format: email
+              subject:
+                type: string
+                maxLength: 200
+              message:
+                type: string
+                maxLength: 10000
+      responses:
+        "202":
+          description: Mensaje aceptado por Pub/Sub
+        "422":
+          description: Datos inválidos
   /users/me:
     get:
       operationId: getCurrentUser
