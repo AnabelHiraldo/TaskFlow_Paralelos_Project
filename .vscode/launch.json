@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "TaskFlow local (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "program": "${workspaceFolder}/Mobile/lib/main.dart",
+      "toolArgs": [
+        "--dart-define=TASKFLOW_API_URL=http://127.0.0.1:8000"
+      ]
+    },
+    {
+      "name": "TaskFlow Google Cloud (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "program": "${workspaceFolder}/Mobile/lib/main.dart"
+    }
+  ]
+}

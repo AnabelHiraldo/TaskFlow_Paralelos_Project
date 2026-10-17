@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
 
- static const String baseUrl = 'https://taskflow-gateway-96gk49a5.uc.gateway.dev';
+ static const String baseUrl = String.fromEnvironment(
+   'TASKFLOW_API_URL',
+   defaultValue: 'https://taskflow-gateway-96gk49a5.uc.gateway.dev',
+ );
 
 
   Future<String?> _token() async {
