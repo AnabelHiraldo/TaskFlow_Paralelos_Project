@@ -145,6 +145,13 @@ resource "google_storage_bucket_iam_member" "taskflow_uploads" {
   member = "serviceAccount:${google_service_account.taskflow.email}"
 }
 
+# Terraform needs to read and update IAM on this bucket only while managing it.
+resource "google_storage_bucket_iam_member" "deployer_taskflow_uploads_admin" {
+  bucket = google_storage_bucket.taskflow_uploads.name
+  role   = "roles/storage.admin"
+  member = "serviceAccount:${var.deployment_service_account_email}"
+}
+
 
 resource "google_secret_manager_secret_version" "db_password" {
   secret      = google_secret_manager_secret.db_password.id
