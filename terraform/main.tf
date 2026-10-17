@@ -54,6 +54,12 @@ resource "google_project_iam_member" "deployer_service_usage_admin" {
   member  = "serviceAccount:${var.deployment_service_account_email}"
 }
 
+resource "google_project_iam_member" "deployer_cloudsql_viewer" {
+  project = var.project_id
+  role    = "roles/cloudsql.viewer"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
 resource "google_sql_database_instance" "taskflow" {
   name                = "taskflow-postgres"
   region              = var.region
