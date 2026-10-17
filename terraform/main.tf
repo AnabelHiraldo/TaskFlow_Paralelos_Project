@@ -1,3 +1,7 @@
+data "google_project" "taskflow" {
+  project_id = var.project_id
+}
+
 resource "google_artifact_registry_repository" "taskflow" {
   location      = var.region
   repository_id = "taskflow-images"
@@ -70,6 +74,12 @@ resource "google_project_iam_member" "deployer_api_gateway_admin" {
   project = var.project_id
   role    = "roles/apigateway.admin"
   member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_service_account_iam_member" "deployer_uses_gateway_default_service_account" {
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${data.google_project.taskflow.number}-compute@developer.gserviceaccount.com"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.deployment_service_account_email}"
 }
 
 resource "google_sql_database_instance" "taskflow" {
