@@ -132,8 +132,26 @@ jobs:
           TF_VAR_smtp_password: ${{ secrets.SMTP_PASSWORD }}
           TF_VAR_smtp_from: ${{ secrets.SMTP_FROM }}
         run: |
-          terraform plan -out=tfplan
-          terraform apply -auto-approve tfplan
+          set +e
+          terraform plan -no-color -out=tfplan > "$RUNNER_TEMP/terraform-plan.log" 2>&1
+          plan_status=$?
+          if [[ "$plan_status" -ne 0 ]]; then
+            cat "$RUNNER_TEMP/terraform-plan.log"
+            diagnostic="$(awk '/^Error:/{show=1} show{gsub(/[[:space:]]+/," "); printf "%s ",$0}' "$RUNNER_TEMP/terraform-plan.log" | tail -c 2500)"
+            echo "::error title=Terraform plan diagnostic::$diagnostic"
+            exit "$plan_status"
+          fi
+          cat "$RUNNER_TEMP/terraform-plan.log"
+
+          terraform apply -no-color -auto-approve tfplan > "$RUNNER_TEMP/terraform-apply.log" 2>&1
+          apply_status=$?
+          if [[ "$apply_status" -ne 0 ]]; then
+            cat "$RUNNER_TEMP/terraform-apply.log"
+            diagnostic="$(awk '/^Error:/{show=1} show{gsub(/[[:space:]]+/," "); printf "%s ",$0}' "$RUNNER_TEMP/terraform-apply.log" | tail -c 2500)"
+            echo "::error title=Terraform apply diagnostic::$diagnostic"
+            exit "$apply_status"
+          fi
+          cat "$RUNNER_TEMP/terraform-apply.log"
 
       - name: Desplegar backend principal en Cloud Run
         run: |
