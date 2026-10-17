@@ -28,6 +28,32 @@ resource "google_project_iam_member" "log_writer" {
   member  = "serviceAccount:${google_service_account.taskflow.email}"
 }
 
+# GitHub Actions runs Terraform and needs the permissions for resources declared below.
+# The workflow is restricted to the repository's main branch through Workload Identity Federation.
+resource "google_project_iam_member" "deployer_service_account_admin" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountAdmin"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_project_iam_member" "deployer_pubsub_admin" {
+  project = var.project_id
+  role    = "roles/pubsub.admin"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_project_iam_member" "deployer_secret_manager_admin" {
+  project = var.project_id
+  role    = "roles/secretmanager.admin"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
+resource "google_project_iam_member" "deployer_service_usage_admin" {
+  project = var.project_id
+  role    = "roles/serviceusage.serviceUsageAdmin"
+  member  = "serviceAccount:${var.deployment_service_account_email}"
+}
+
 resource "google_sql_database_instance" "taskflow" {
   name                = "taskflow-postgres"
   region              = var.region
@@ -189,12 +215,6 @@ resource "google_pubsub_topic_iam_member" "backend_publish_notifications" {
   topic  = google_pubsub_topic.notifications.id
   role   = "roles/pubsub.publisher"
   member = "serviceAccount:${google_service_account.taskflow.email}"
-}
-
-resource "google_project_iam_member" "notification_logs" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${google_service_account.notification_runtime.email}"
 }
 
 resource "google_secret_manager_secret" "smtp_username" {
