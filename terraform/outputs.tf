@@ -41,3 +41,7 @@ output "notification_cloud_run_url" {
 output "notification_subscription" {
   value = google_pubsub_subscription.notifications_to_cloud_run.name
 }
+
+output "user_sync_subscription" {
+  value = google_pubsub_subscription.user_sync_local.name
+}

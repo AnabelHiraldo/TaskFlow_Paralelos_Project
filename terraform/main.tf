@@ -222,6 +222,25 @@ resource "google_pubsub_topic" "notifications" {
   depends_on = [google_project_service.notification_apis]
 }
 
+# Mensajes para replicar altas en la base PostgreSQL local mediante un agente pull.
+resource "google_pubsub_topic" "user_sync" {
+  name       = "taskflow-user-sync"
+  depends_on = [google_project_service.notification_apis]
+}
+
+resource "google_pubsub_subscription" "user_sync_local" {
+  name                       = "taskflow-user-sync-local"
+  topic                      = google_pubsub_topic.user_sync.id
+  message_retention_duration = "604800s"
+  ack_deadline_seconds       = 60
+}
+
+resource "google_pubsub_topic_iam_member" "backend_publish_user_sync" {
+  topic  = google_pubsub_topic.user_sync.id
+  role   = "roles/pubsub.publisher"
+  member = "serviceAccount:${google_service_account.taskflow.email}"
+}
+
 resource "google_service_account" "notification_runtime" {
   account_id   = "taskflow-notifications"
   display_name = "TaskFlow notification Cloud Run runtime"

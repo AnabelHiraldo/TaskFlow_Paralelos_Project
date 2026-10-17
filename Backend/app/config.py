@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     gcp_project_id: str | None = None
     notification_topic: str = "taskflow-notifications"
+    user_sync_topic: str = "taskflow-user-sync"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
