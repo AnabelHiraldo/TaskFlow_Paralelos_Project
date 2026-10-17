@@ -43,7 +43,8 @@ def send_email(notification: Notification) -> None:
     host = os.environ["SMTP_HOST"]
     port = int(os.getenv("SMTP_PORT", "587"))
     username = os.environ["SMTP_USERNAME"]
-    password = os.environ["SMTP_PASSWORD"]
+    # Google displays app passwords in four-character groups; remove copied whitespace before SMTP auth.
+    password = "".join(os.environ["SMTP_PASSWORD"].split())
     sender = os.environ["SMTP_FROM"]
 
     email = EmailMessage()
